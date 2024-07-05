@@ -44,10 +44,9 @@
 <body bgcolor="#191970">
     <script src="./js/cursor_effect.js"></script>
     <h1 style="font-family: latticeFont;">Vblog</h1>
-    <h2 style="text-align:center;font-family: latticeFont;">About me</h2>
+    <h2 style="text-align:center;font-family: latticeFont;">在 DOS 下实现多线程</h2>
   
-<p>在 DOS 下实现多线程
-<br>
+<p>
 程序在 Turbo C 3.0 下调试通过，采用了最简单的时间片轮转法，实现了多线程的系统，程序尽量采用了最简洁的技术来实现多任务的系统，主要使用到了C标准库中的setjmp和longjmp两个函数，程序绝大部分都是采用C/C++语言书写，但是仍然不可避免的采用了三句内嵌汇编，来进行线程堆栈的切换。由于DOS下的系统调用，都是不可重入的.如果在多个线程中同时调用了DOS的系统调用，就会出现死机等问题。一般可以使用信号量来解决DOS重入问题。整个系统，是使用时钟中断处理程序，来完成任务的调度。</p>
 <pre>
 	<code>// stdefine.h
@@ -349,7 +348,7 @@ main()
 }
 </code>
 </pre>
-<p>【在 DOS 下实现多线程】
+<p>转载自【在 DOS 下实现多线程】
 
 	<a href="http://t.csdnimg.cn/kp0Rs">http://t.csdnimg.cn/kp0Rs</a>
 </p>
