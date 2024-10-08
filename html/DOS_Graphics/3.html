@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html style="transition: background-color 0.15s ease 0s;">
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta http-equiv="pragram" content="no-cache">
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="expires" content="0">
+
+    <title>Vblog</title>
+    <style>
+        body{
+            width: 35em;
+            margin: 0 auto;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+        }
+        th,td,p,h1,h2,div,code,pre{
+            color: #FFFFFF;
+        }
+        a:link{
+            color: #FFFF00;
+        }
+        a:visited{
+            color: #808080;
+        }
+    </style>
+
+<style>
+    @font-face
+    {
+        font-family: latticeFont;
+        src: url(/00TT.TTF);
+    }
+    
+    div
+    {
+        font-family: latticeFont;
+    }
+    </style>
+</head>
+
+<body bgcolor="#012456">
+    <script src="/js/cursor_effect.js"></script>
+    <h1 style="font-family: latticeFont;">Vblog</h1>
+    <h2 style="text-align:center;font-family: latticeFont;">CWSDPMI的简单配置</h2>
+
+<p>如果你在msdos上运行某个程序，它没有正确的执行，而是打印了一行警告...</p>
+<pre>
+	<code>Load error: no DPMI - Get csdpmi*b.zip
+</code>
+</pre>
+<p>你需要在网络上下载csdpmi，我下载到的是rar格式，解压好以后，传输入电脑。把它放在一个合适的目录里面。执行bin目录里面的CWSDPMI.EXE，这时候再回去执行刚才的程序，就可以正常运行了。
+再次执行，又会报错，这是因为没有常驻内存，只需要执行：</p>
+<pre>
+	<code>CWSDPMI.EXE -p
+</code>
+</pre>
+<p>这样即可让它常驻内存，方便起见，记下CWSDPMI的路径，在C盘autorun.bat中添加
+	<code>path_to_csdpmi\bin\CWSDPMI.EXE</code>并保存，重启即可。
+</p>
+    
+    <!--<font size="4.5"><p align="center">祝大家中秋节快乐！</p></font>-->
+    <hr>
+
+    <p><div>By Voosk</div></p>
+
+</body>
+
+</html>

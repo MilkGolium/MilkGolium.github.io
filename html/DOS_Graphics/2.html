@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html style="transition: background-color 0.15s ease 0s;">
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta http-equiv="pragram" content="no-cache">
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="expires" content="0">
+
+    <title>Vblog</title>
+    <style>
+        body{
+            width: 35em;
+            margin: 0 auto;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+        }
+        th,td,p,h1,h2,div{
+            color: #FFFFFF;
+        }
+        a:link{
+            color: #FFFF00;
+        }
+        a:visited{
+            color: #808080;
+        }
+    </style>
+
+<style>
+    @font-face
+    {
+        font-family: latticeFont;
+        src: url(/00TT.TTF);
+    }
+    
+    div
+    {
+        font-family: latticeFont;
+    }
+    </style>
+</head>
+
+<body bgcolor="#012456">
+    <script src="/js/cursor_effect.js"></script>
+    <h1 style="font-family: latticeFont;">Vblog</h1>
+    <h2 style="text-align:center;font-family: latticeFont;">有关VGA显存的相关理解</h2>
+    <p>
+        <p>视频卡内存是映射到系统主内存上的。这段内存里面每个像素由8位表示，8位能表示256个数字，也就是256个颜色。<br>
+        从第一个八位开始，依次向后排，到第320个八位的时候是第二行第一个像素。<br>
+        创建一个指针指向那段内存的开头，就可以像访问数组那样的方式访问视频内存了。</p>
+    </p>
+    <!--<font size="4.5"><p align="center">祝大家中秋节快乐！</p></font>-->
+    <hr>
+
+    <p><div>By Voosk</div></p>
+
+</body>
+
+</html>

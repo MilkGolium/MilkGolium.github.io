@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html style="transition: background-color 0.15s ease 0s;">
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta http-equiv="pragram" content="no-cache">
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="expires" content="0">
+
+    <title>Vblog</title>
+    <style>
+        body{
+            width: 35em;
+            margin: 0 auto;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+        }
+        th,td,p,h1,h2,div,code,pre{
+            color: #FFFFFF;
+        }
+        a:link{
+            color: #FFFF00;
+        }
+        a:visited{
+            color: #808080;
+        }
+    </style>
+
+<style>
+    @font-face
+    {
+        font-family: latticeFont;
+        src: url(/00TT.TTF);
+    }
+    
+    div
+    {
+        font-family: latticeFont;
+    }
+    </style>
+</head>
+
+<body bgcolor="#012456">
+    <script src="./js/cursor_effect.js"></script>
+    <h1 style="font-family: latticeFont;">Vblog</h1>
+    <h2 style="text-align:center;font-family: latticeFont;">在 DOS 下实现多线程</h2>
+  
+<p>
+程序在 Turbo C 3.0 下调试通过，采用了最简单的时间片轮转法，实现了多线程的系统，程序尽量采用了最简洁的技术来实现多任务的系统，主要使用到了C标准库中的setjmp和longjmp两个函数，程序绝大部分都是采用C/C++语言书写，但是仍然不可避免的采用了三句内嵌汇编，来进行线程堆栈的切换。由于DOS下的系统调用，都是不可重入的.如果在多个线程中同时调用了DOS的系统调用，就会出现死机等问题。一般可以使用信号量来解决DOS重入问题。整个系统，是使用时钟中断处理程序，来完成任务的调度。</p>
+<pre>
+	<code>// stdefine.h
+
+/* 标准头文件 */  
+#ifndef _STDEFINE_H_  
+#define _STDEFINE_H_  
+  
+/* 常量定义 */  
+#define TRUE  1  
+#define FALSE 0  
+  
+/* 标准的类型定义 */  
+//typedef int BOOL;  
+typedef unsigned char  BYTE;  
+typedef unsigned short WORD;  
+typedef unsigned long  DWORD;  
+typedef long     int   LONG;  
+  
+/* 定义常用的宏 */  
+#define LOWBYTE(value)     ( (BYTE)  ((value) &amp; 0x00FF) )  
+#define HIBYTE(value)      ( (BYTE)  ((value) &gt;&gt; 8)     )  
+#define LOWWORD(value)     ( (WORD)  ((value) &amp; 0xFFFF) )  
+#define HIWORD(value)      ( (WORD)  ((value) &gt;&gt; 16)    )
+#define MAKEWORD(hi, low)  ( (WORD)  (((hi)&lt;&lt;8)|(low))  )
+#endif
+</code>
+</pre>
+<pre>
+	<code>// thread.h
+
+#ifndef _THREAD_H_  
+#define _THREAD_H_  
+  
+/* 包含头文件 */  
+#include &quot;stdefine.h&quot;  
+  
+/* 类型声明 */  
+typedef int (*THREADPROC)(void *argv);  
+  
+/* 函数声明 */  
+int InitMultiThread(unsigned short cycle); /* cycle 主线程的时间片 */  
+void CloseMultiThread();      
+/* proc 线程入口函数，argv 参数，cycle 线程时间片，返回值:线程ID */
+int  CreateThread(THREADPROC proc, void *argv, WORD cycle);  
+void DestroyThread(int id);  
+void RunThread(int id);  
+void StopThread(int id);  
+void PauseThread(int t);  
+void KeepMainThread(int d);    //只运行主线程  
+#endif
+</code>
+</pre>
+<pre>
+	<code>// thread.cpp
+
+/* 包含头文件 */  
+#include &lt;mem.h&gt;  
+#include &lt;string.h&gt;  
+#include &lt;stdlib.h&gt;  
+#include &lt;setjmp.h&gt;  
+#include &lt;dos.h&gt;  
+#include &quot;stdefine.h&quot;  
+#include &quot;thread.h&quot;  
+  
+/* 常量定义 */  
+#define MAX_THREAD_NUM    5       //16     定义最大的线程数  
+#define THREAD_STACK_SIZE 256     //512    定义每个线程申请的内存  
+#define THREAD_DEAD       0  
+#define THREAD_READY      1  
+#define THREAD_RUNNING    2  
+#define THREAD_STOPPED    3  
+  
+#define _INT_1CH          0x1c  
+  
+  
+/* 类型定义 */  
+typedef struct  
+{  
+    THREADPROC proc;  
+    void      *argv;  
+    WORD       status;  
+    int       timer;       //当前剩余时间  
+    WORD       cycle;      //分配的时间片大小  
+    jmp_buf    jmpbuf;  
+    BYTE       stack[THREAD_STACK_SIZE];  
+} THREADITEM, PTHREADITEM;  
+  
+/* 内部全局变量定义 */  
+static void interrupt (*old_int_1ch)(...);  
+static THREADITEM thread_list[MAX_THREAD_NUM] = {0};  
+static int cur_thread = 0;  
+static int main_thread_keep=0;         //主线程标志  
+  
+extern int graph_sigle;                 //外部信号量，解决程序不能重入问题，如图形库函数不能重入  
+                                        //通常=1  
+  
+/* 内部函数声明 */  
+static void interrupt MULTI_THREAD_MAN(...);  
+static void changetimer(WORD t);  
+  
+  
+/* 函数实现 */  
+int InitMultiThread(unsigned short cycle)    //初始化多线程调度程序  
+{  
+    memset(thread_list, 0, sizeof(THREADITEM) * MAX_THREAD_NUM);  
+    cur_thread = 0;  
+    /* main thread cycle */  
+    thread_list[cur_thread].status = THREAD_RUNNING;  
+    thread_list[cur_thread].timer  = cycle;  
+    thread_list[cur_thread].cycle  = cycle;     
+    old_int_1ch = getvect(_INT_1CH);  
+    setvect(_INT_1CH, MULTI_THREAD_MAN);  
+    return TRUE;  
+}  
+  
+void CloseMultiThread()     //关闭线程序调度  
+{  
+//  changetimer(0);  
+    disable();  
+    setvect(_INT_1CH, old_int_1ch);  
+    enable();  
+}  
+void KeepMainThread(int d)  //选择是否只运行主线程  
+{  
+    if(d==0)  
+    {  
+        main_thread_keep=0;     //多线程  
+        disable();  
+        setvect(_INT_1CH, MULTI_THREAD_MAN);  //调度程序重新作用  
+        enable();  
+    }  
+    else  
+    {  
+        main_thread_keep=1;     //==1时,只运行主线程（单线程）  
+    }  
+}  
+int  CreateThread(THREADPROC proc, void *argv, WORD cycle)   //创建新线程  
+{  
+    int i;  
+    for (i=0; i&lt;MAX_THREAD_NUM; i++)  
+    {  
+        if (thread_list[i].status == THREAD_DEAD)  
+        {  
+            thread_list[i].proc   = proc;  
+            thread_list[i].argv   = argv;  
+            thread_list[i].status = THREAD_READY;  
+            thread_list[i].timer  = cycle;  
+            thread_list[i].cycle  = cycle;  
+            return i;  
+        }  
+    }  
+    return NULL;  
+}  
+  
+void DestroyThread(int id)  
+{  
+    memset(&amp;thread_list[id], 0, sizeof(THREADITEM));  
+}  
+  
+void RunThread(int id)   //重新开启原先被暂停的线程   
+{  
+    disable();  
+    thread_list[id].status = THREAD_RUNNING;  
+    enable();  
+}  
+  
+void StopThread(int id)  //用于暂时关闭副线程  
+{  
+    while(1)  
+    {  
+        if(graph_sigle==1)        //信号为1时才关闭线程  
+        {  
+            disable();  
+            thread_list[id].status = THREAD_STOPPED;  
+            enable();  
+            break;  
+        }  
+    }  
+}  
+  
+/* 内部函数实现 */  
+static void changetimer(WORD t)     //修改单位时间  
+{  
+    outportb(0x43, 0x3c);  
+    outportb(0x40, LOWBYTE(t));  
+    outportb(0x40, HIBYTE(t));  
+}  
+  
+/* 线程调度函数，是整个系统的关键 */  
+static void interrupt MULTI_THREAD_MAN(...)  
+{  
+    static int i;  
+    static int temp;  
+    /* 关中断 */  
+    disable();  
+    if(cur_thread==0 &amp;&amp; main_thread_keep==1)    
+    {  
+        setvect(_INT_1CH, old_int_1ch);   //当运行到主线程时间片且main_thread_keep==1时，关闭线程调度程序  
+        enable();  
+        return;  
+    }  
+    //多线程调度  
+    if (--thread_list[cur_thread].timer &gt; 0)  
+    {   /* 当前线程的时间片未用完,不进行线程调度 */  
+        enable();  /* 开中断 */  
+        return;  
+    }  
+  
+    /* 当前线程的时间片用完,进行线程调度 */  
+    thread_list[cur_thread].timer = thread_list[cur_thread].cycle;  /* 重新分配时间片 */  
+    if (!setjmp(thread_list[cur_thread].jmpbuf))  /* 保存当前线程的运行环境 */  
+    {   /* 开始线程调度 */  
+        for (i=0; i&lt;MAX_THREAD_NUM; i++)  
+        {   /* 查找下一个可调度的线程 */  
+            cur_thread++;  
+            cur_thread %= MAX_THREAD_NUM;  
+            if (thread_list[cur_thread].status == THREAD_READY)  
+            {  
+                /* 为新线程分配堆栈 */  
+                temp = (WORD)(thread_list[cur_thread].stack);  
+                temp += THREAD_STACK_SIZE;  
+                asm mov sp, temp;  
+                asm mov ax, ds;  
+                asm mov ss, ax;  
+  
+                /* 调用线程函数 */  
+                thread_list[cur_thread].status = THREAD_RUNNING;  
+                outp(0x20, 0x20);  /* 清除中断屏蔽 */  
+                enable();  /* 开中断 */  
+                thread_list[cur_thread].proc(thread_list[cur_thread].argv);  
+  
+                /* 线程运行结束 */  
+                disable(); /* 关中断 */  
+                thread_list[cur_thread].status = THREAD_DEAD;  
+                longjmp(thread_list[0].jmpbuf, 1);  /* 返回主线程 */  
+                break;  
+            }  
+            else if (thread_list[cur_thread].status == THREAD_RUNNING)  
+            {   /* 调度线程 */  
+                longjmp(thread_list[cur_thread].jmpbuf, 1);  
+                break;  
+            }  
+        }  
+    }  
+    outp(0x20, 0x20);  /* 清除中断屏蔽 */  
+    enable();  /* 开中断 */  
+} 
+</code>
+</pre>
+<pre>
+	<code>// main.cpp
+
+/* 包含头文件 */  
+#include &lt;stdio.h&gt;  
+#include &lt;stdlib.h&gt;  
+#include &lt;dos.h&gt;  
+#include &lt;conio.h&gt;  
+#include &quot;thread.h&quot;  
+  
+int graph_sigle=1;  //如果多线程中同时有DOS系统调用，用信号量隔开  
+  
+/* 以下是测试程序 */  
+int fun(void *n)  
+{  
+    while (1)  
+    {  
+        sound(1000);  
+        delay(200);  
+        nosound();  
+        delay(200);  
+    }  
+}  
+  
+int fun2(void *s)  
+{  
+    printf(&quot;%s&quot;, s);  
+}  
+  
+/* 演示了三个线程：主线程、fun 和 fun2 */  
+main()  
+{  
+    int id1;  
+    int id2;  
+    WORD i = 0;  
+    InitMultiThread(1);  
+    id1 = CreateThread(fun, NULL, 1);  
+    id2 = CreateThread(fun2, (void*)&quot;hello world !/r/n&quot;, 1);  
+    for (i=0; i&lt; 3; i++)delay(1000);  
+    while (!kbhit())  
+    {  
+        printf(&quot;rockcarry %u/r/n&quot;, i++);  
+    }  
+    getch();  
+    DestroyThread(id2);  
+    DestroyThread(id1);  
+    CloseMultiThread();  
+    nosound();  
+}
+</code>
+</pre>
+<p>转载自【在 DOS 下实现多线程】
+
+	<a href="http://t.csdnimg.cn/kp0Rs">http://t.csdnimg.cn/kp0Rs</a>
+</p>
+
+  
+    <!--<font size="4.5"><p align="center">祝大家中秋节快乐！</p></font>-->
+    <hr>
+
+    <p><div>By Voosk</div></p>
+
+</body>
+
+</html>

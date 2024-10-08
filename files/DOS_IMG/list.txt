@@ -1,0 +1,4 @@
+1. DOS8软盘.img
+引导后可以使用fdisk.exe把DOS8安装到硬盘里面。
+2. xxx name
+description

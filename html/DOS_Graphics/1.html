@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html style="transition: background-color 0.15s ease 0s;">
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta http-equiv="pragram" content="no-cache">
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="expires" content="0">
+
+    <title>Vblog</title>
+    <style>
+        body{
+            width: 35em;
+            margin: 0 auto;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+        }
+        th,td,p,h1,h2,div{
+            color: #FFFFFF;
+        }
+        a:link{
+            color: #FFFF00;
+        }
+        a:visited{
+            color: #808080;
+        }
+    </style>
+
+<style>
+    @font-face
+    {
+        font-family: latticeFont;
+        src: url(/00TT.TTF);
+    }
+    
+    div
+    {
+        font-family: latticeFont;
+    }
+    </style>
+</head>
+
+<body bgcolor="#012456">
+    <script src="/js/cursor_effect.js"></script>
+    <h1 style="font-family: latticeFont;">Vblog</h1>
+    <h2 style="text-align:center;font-family: latticeFont;">VGA mode 13h</h2>
+    
+<p>VGA mode 13h是最广泛使用的 PC 图形模式之一，也是最容易使用的。它的分辨率为 320x200，支持256色，并且可以在任何兼容VGA的显卡上运行（无需EGA或CGA板的支持）<br>
+第一步是选择此模式，通过调用 VGA BIOS 中断0x10来完成，例如：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>#include &lt;dpmi.h&gt;
+void set_mode_13h() 
+{
+  __dpmi_regs r; 
+  rxax = 0x13; 
+  __dpmi_int(0x10，&amp;r); 
+}
+</code></pre>
+
+    </div></div><p>这里最重要的是数字 0x13，它在调用 BIOS 函数之前被放入 AX 寄存器中。此值指定您要设置的模式：不用猜也知道“mode 13h”这个名字是从哪里来的！</p>
+<p>在退出程序之前，您当然应该切换回正常的 DOS 文本模式，这可以按照与上面完全相同的方式完成，但用 3 替换为模式号，例如：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>
+void return_to_text_mode()
+   { 
+      __dpmi_regs r; 
+      rxax = 3; 
+      __dpmi_int(0x10，&amp;r); 
+   }
+</code></pre>
+
+</div></div><p>设置视频模式后，下一步就是在屏幕上绘制一些东西。VGA 内存位于物理地址 0xA0000，因此您需要使用&lt;sys/farptr.h&gt;或dosmemput()函数来访问它：有关详细信息，请参阅 DPMI 章节。最基本的级别是，可以使用以下代码在屏幕上绘制单个像素：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>   #include &lt;go32.h&gt; 
+
+   #include &lt;sys/farptr.h&gt; 
+
+   void putpixel_13h(int x, int y, int color) 
+
+   { 
+
+      _farpokeb(_dos_ds, 0xA0000+y*320+x, color); 
+
+   }
+</code></pre>
+
+</div></div><p>将图形显示为单个像素序列往往非常慢，但同样的原理可以应用于更复杂和有用的形状，如线条、矩形和圆形。一种有用的优化是在例程开始时只调用一次_farsetsel(_dos_ds)函数，然后使用更快的_farns*()函数进行其余的绘图。使用此方法，矩形填充可以实现为：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>void rectangle_13h(int x, int y, int w, int h, int color) 
+{
+  int i, j; 
+  _farsetsel(_dos_ds); 
+  for (j=y; j&lt;y+h; j++)
+  for (i=x; i&lt;x+w; i++) 
+  _farnspokeb(0xA0000+j*320+i, color); 
+}
+</code></pre>
+</div></div><p>另一个方便的技巧是使用_farnspokew()或_farnspokel()函数同时写入两个或四个像素：这通常可以使单字节操作的速度提高 4 倍！</p>
+<p>另一种方法是在将整个图片复制到屏幕上之前，先在内存缓冲区中构建它。这可以通过dosmemput()函数轻松完成，例如：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>#include &lt;sys/movedata.h&gt; 
+char framebuffer[320*200]; 
+  int i; 
+  /*清除帧缓冲区*/ 
+  memset(framebuffer, 0, sizeof(framebuffer)); 
+  /*绘制一些对角线*/ 
+  for (i=0; i&lt;200; i++) {
+    framebuffer[i*320+i] = i; 
+    framebuffer[i*320+i/2] = i; 
+    framebuffer[i*320+i/3] = i; 
+  }
+  /*将缓冲区复制到屏幕*/ 
+  dosmemput(framebuffer, 320*200, 0xA0000);
+</code></pre>
+
+</div></div><p>到目前为止，这些函数只是将颜色以 0 到 255 之间的数字绘制到屏幕上，但对于真正的程序，您显然需要某种方式来了解每个数字代表什么颜色。这由称为调色板的硬件组件控制，该组件是一个表，列出了您可以显示的 256 个值的实际颜色值。当您首次选择视频模式时，调色板中的前 16 个条目（颜色 0 到 15）将设置为标准 DOS 文本模式颜色（黑色、蓝色、绿色、青色、红色、洋红色、棕色、浅灰色、深灰色、淡蓝色、淡绿色、淡青色、淡红色、淡洋红色、黄色和白色），但其他 240 种颜色可能会根据机器设置为不同的值。为了使用除这 16 种默认颜色以外的任何颜色，您必须将调色板设置为您自己的一些新值，方法是将调色板索引写入硬件端口 0x3C8，然后将三个颜色值写入端口 0x3C9，例如：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>#include &lt;pc.h&gt; 
+void set_color(int color, int red, int green, int blue)
+{
+  outportb(0x3C8, color); 
+  outportb(0x3C9, red); 
+  outportb(0x3C9, green); 
+  outportb(0x3C9, blue); 
+}
+</code></pre>
+
+</div></div><p>红色、绿色和蓝色的颜色值范围是从 0 到 63，因此例如调用 set_color(10, 0, 0, 0) 会将颜色编号 10 更改为黑色，而调用 set_color(10, 63, 63, 63) 会将其更改为白色，而 set_color(10, 63, 40, 0) 会将其更改为橙色。</p>
+<p>调色板硬件的一个优点是，即使您在屏幕上绘制了某些内容，也可以使用它来改变颜色，这对于实现淡入淡出和某些类型的动画非常方便。例如，颜色 1 在默认调色板中为蓝色，因此如果您在屏幕上绘制大量 1 像素，它将被蓝点覆盖。但是，如果您随后调用set_color(1, 0, 63, 0)，所有这些点都会立即变为绿色！除了可以非常轻松地使某些图形闪烁为不同的颜色外，此技巧还可用于通过逐渐更改所有 256 个调色板值以使其变亮或变暗，使整个显示屏淡入或淡出空白屏幕，并且可以通过对调色板颜色进行更细微的更改来实现许多有趣的效果。</p>
+<p>在更改任何调色板值之前，最好先将程序与垂直回扫同步。这是显示器内的电子束到达屏幕底部并重新向上移动以准备显示另一幅图像的时间段，在这个短暂的间隔内，图形卡有机会休息，因为不需要向显示器发送任何像素数据。回扫每秒发生 70 次，大多数较旧的卡只允许您在此时更改调色板值。您可以在许多较新的卡上随时更改颜色，如果您在旧硬件上错误地执行此操作，您的程序仍会正常工作，但它可能会导致屏幕上出现一些静态或“雪花”，这很丑陋，如果您始终注意先与回扫同步，则很容易避免。可以通过检查端口 0x3DA 的第 3 位来检测回扫周期，例如：</p>
+<div><div class="v-md-pre-wrapper copy-code-mode v-md-pre-wrapper- extra-class"><pre class="v-md-prism-"><code>void vsync() 
+{ 
+  /* 等待直到任何先前的回溯结束 */ 
+  do {
+  } while (inportb(0x3DA) &amp; 8); 
+  /* 等待直到新的回溯刚刚开始 */ 
+  do { 
+  } while (!(inportb(0x3DA) &amp; 8)); 
+}
+</code></pre>
+
+</div></div><p>尽管可以在一次回扫内更改多种颜色，但您始终应在修改任何调色板颜色之前调用此函数，因此即使您在其后立即多次调用set_color() ，也只需调用一次vsync() 。</p>
+<p>就是这样，伙计们！这应该是您在 VGA 320x200 模式 13h 中启动和运行程序所需的一切，并且相同的技术可以应用于其他 VGA 模式，例如 16 色和调整的模式 X 分辨率。在这些其他 VGA 模式下编程的所有 djgpp 特定部分与模式 13h 相同，因此您可以将本文档中的 djgpp 材料与来自网络上许多可用来源的硬件信息相结合，并希望能够访问您喜欢的任何 VGA 图形模式。</p>
+
+    
+    <p>
+      Translated and compiled from DJGPP
+    </p>
+    <a href="http://www.reliablecounter.com" target="_blank"><img src="http://www.reliablecounter.com/count.php?page=milkgolium.github.io&digit=style/plain/1/&reloads=0" alt="reliablecounter.com" title="reliablecounter.com" border="0"></a><br /><a href="http://relia" target="_blank" style="font-family: Geneva, Arial; font-size: 9px; color: #330010; text-decoration: none;">reliablecounter.com</a>
+    <!--<font size="4.5"><p align="center">祝大家中秋节快乐！</p></font>-->
+    <hr>
+
+    <p><div>By Voosk</div></p>
+
+</body>
+
+</html>
