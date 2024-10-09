@@ -1,7 +1,8 @@
 @font-face {
-    font-family: "myFont";
-    src: url("myFont.ttf");
-}
+    font-family: "DOS_Font";
+    src: url("/fonts/DOS8x14.ttf");
+  }
+  
 
 body {
     color: white;
@@ -19,13 +20,15 @@ table.bodytable {
 table.bodytable tr.top td {
     background: #0000ac;
     color: #fff;
-    font-weight: bold
+    font-weight: bold;
+    font-family: "DOS_Font";
 }
 
 table.bodytable tr.bottom td {
     background: #0000ac;
     color: #fff;
-    font-weight: bold
+    font-weight: bold;
+    font-family: "DOS_Font";
 }
 
 .unimono {
