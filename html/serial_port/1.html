@@ -1,0 +1,44 @@
+#include <stdio.h>
+#include <conio.h>
+#include <dos.h>
+
+#define COM1 0x3F8  // COM1 端口地址
+
+// 初始化串口
+void init_serial(int port, int baud_rate) {
+    int divisor = 115200 / baud_rate;
+    outp(port + 3, 0x80);  // 启用 DLAB
+    outp(port, divisor & 0xFF);  // 设置波特率低字节
+    outp(port + 1, (divisor >> 8) & 0xFF);  // 设置波特率高字节
+    outp(port + 3, 0x03);  // 8位数据，1位停止位，无校验
+}
+
+// 发送一个字符
+void send_char(int port, char ch) {
+    while ((inp(port + 5) & 0x20) == 0;  // 等待发送缓冲区为空
+    outp(port, ch);
+}
+
+// 发送字符串
+void send_string(int port, char *str) {
+    while (*str) {
+        send_char(port, *str++);
+    }
+}
+
+int main() {
+    char input[256];
+
+    clrscr();
+    init_serial(COM1, 9600);  // 初始化 COM1，波特率 9600
+
+    printf("请输入要发送的字符串: ");
+    gets(input);  // 获取用户输入
+
+    send_string(COM1, input);  // 发送字符串
+    send_string(COM1, "\r\n");  // 发送换行符
+
+    printf("字符串已发送！\n");
+    getch();
+    return 0;
+}
